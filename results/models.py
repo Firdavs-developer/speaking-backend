@@ -13,6 +13,10 @@ class Result(models.Model):
         blank=True,
     )
 
+    # Name the student typed on the start page right before the test.
+    # Shown to the admin instead of the account name when provided.
+    student_name = models.CharField(max_length=120, blank=True)
+
     overall_band = models.FloatField(null=True, blank=True)
     estimated_cefr = models.CharField(max_length=8, blank=True)
     summary = models.TextField(blank=True)

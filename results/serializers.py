@@ -57,6 +57,9 @@ class AdminResultSerializer(serializers.ModelSerializer):
         ]
 
     def get_studentName(self, obj):
+        # Prefer the name typed before the test; fall back to the account name.
+        if obj.student_name:
+            return obj.student_name
         return obj.user.name if obj.user else "Anonymous"
 
     def get_studentEmail(self, obj):
@@ -64,10 +67,11 @@ class AdminResultSerializer(serializers.ModelSerializer):
 
 
 class CreateResultSerializer(serializers.Serializer):
-    """Accepts { answers: [...], evaluation: {...} } from the frontend."""
+    """Accepts { answers: [...], evaluation: {...}, studentName } from the frontend."""
 
     answers = serializers.ListField(child=serializers.DictField(), allow_empty=False)
     evaluation = serializers.DictField(required=False, default=dict)
+    studentName = serializers.CharField(required=False, allow_blank=True, default="")
 
     def create(self, validated_data):
         evaluation = validated_data.get("evaluation") or {}
@@ -80,6 +84,7 @@ class CreateResultSerializer(serializers.Serializer):
 
         result = Result.objects.create(
             user=user,
+            student_name=str(validated_data.get("studentName") or "")[:120],
             overall_band=overall_band,
             estimated_cefr=str(evaluation.get("estimatedCefr") or "")[:8],
             summary=str(evaluation.get("summary") or ""),

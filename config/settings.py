@@ -175,12 +175,17 @@ REST_FRAMEWORK = {
 }
 
 
-# CORS — allow the Next.js frontend (dev server) to call the API.
+# CORS — allow the Next.js frontend (dev server + Vercel) to call the API.
 CORS_ALLOWED_ORIGINS = env(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000',
+    'http://localhost:3000,http://127.0.0.1:3000,https://speaking-neon.vercel.app',
 ).split(',')
 CORS_ALLOW_CREDENTIALS = True
+
+# Vercel preview/branch deployments use changing subdomains, so allow them by pattern.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^https://speaking-neon.*\.vercel\.app$',
+]
 
 # Allow the admin question-management header through CORS preflight.
 from corsheaders.defaults import default_headers  # noqa: E402

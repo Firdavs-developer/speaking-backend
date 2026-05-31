@@ -1,10 +1,21 @@
+from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Result
-from .serializers import CreateResultSerializer, ResultSerializer
+from .serializers import (
+    AdminResultSerializer,
+    CreateResultSerializer,
+    ResultSerializer,
+)
+
+
+def _is_admin(request):
+    """The admin password doubles as the bearer token for admin views."""
+    token = (request.headers.get("X-Admin-Token") or "").strip()
+    return bool(token) and token == settings.ADMIN_PASSWORD
 
 
 class ResultListCreateView(APIView):
@@ -26,6 +37,25 @@ class ResultListCreateView(APIView):
         return Response(
             ResultSerializer(result).data, status=status.HTTP_201_CREATED
         )
+
+
+class AllResultsView(APIView):
+    """GET every student's result (admin only)."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not _is_admin(request):
+            return Response(
+                {"error": "Ruxsat yo'q. Admin sifatida kiring."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        results = (
+            Result.objects.select_related("user")
+            .prefetch_related("answers")
+            .order_by("-created_at")
+        )
+        return Response({"results": AdminResultSerializer(results, many=True).data})
 
 
 class ResultDetailView(APIView):

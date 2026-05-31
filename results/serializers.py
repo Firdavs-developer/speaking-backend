@@ -32,6 +32,37 @@ class ResultSerializer(serializers.ModelSerializer):
         ]
 
 
+class AdminResultSerializer(serializers.ModelSerializer):
+    """Result representation for admins — includes the student's identity."""
+
+    answers = AnswerSerializer(many=True, read_only=True)
+    overallBand = serializers.FloatField(source="overall_band", read_only=True)
+    estimatedCefr = serializers.CharField(source="estimated_cefr", read_only=True)
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    studentName = serializers.SerializerMethodField()
+    studentEmail = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Result
+        fields = [
+            "id",
+            "studentName",
+            "studentEmail",
+            "overallBand",
+            "estimatedCefr",
+            "summary",
+            "evaluation",
+            "answers",
+            "createdAt",
+        ]
+
+    def get_studentName(self, obj):
+        return obj.user.name if obj.user else "Anonymous"
+
+    def get_studentEmail(self, obj):
+        return obj.user.email if obj.user else ""
+
+
 class CreateResultSerializer(serializers.Serializer):
     """Accepts { answers: [...], evaluation: {...} } from the frontend."""
 

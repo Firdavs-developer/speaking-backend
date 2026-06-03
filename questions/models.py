@@ -19,6 +19,8 @@ class Question(models.Model):
     # Public string id used by the frontend (e.g. "p1-q1").
     qid = models.CharField(max_length=120, unique=True)
     part = models.CharField(max_length=10, choices=PART_CHOICES)
+    # Sub-section for Part 1: "1.1" (simple) or "1.2" (with picture). Blank otherwise.
+    section = models.CharField(max_length=10, blank=True)
     part_label = models.CharField(max_length=120, default="Question")
     question = models.TextField()
     prep_seconds = models.PositiveIntegerField(default=5)

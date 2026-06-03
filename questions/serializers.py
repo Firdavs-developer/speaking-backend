@@ -24,11 +24,14 @@ class QuestionSerializer(serializers.ModelSerializer):
         source="against_points", child=serializers.CharField(), required=False
     )
 
+    section = serializers.CharField(required=False, allow_blank=True)
+
     class Meta:
         model = Question
         fields = [
             "id",
             "part",
+            "section",
             "partLabel",
             "question",
             "prepSeconds",
@@ -48,6 +51,8 @@ class QuestionSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # Drop optional keys when empty so the payload matches the frontend type.
+        if not data.get("section"):
+            data.pop("section", None)
         if not data.get("image"):
             data.pop("image", None)
         if not data.get("referenceDescription"):
@@ -106,9 +111,14 @@ def normalize_question(raw, index=0):
     speak = raw.get("speakSeconds")
     speak_seconds = int(round(speak)) if isinstance(speak, (int, float)) and speak > 0 else fallback["speak_seconds"]
 
+    section = (raw.get("section") or "").strip()
+    if part != Question.PART_1 or section not in ("1.1", "1.2"):
+        section = ""
+
     values = {
         "qid": qid,
         "part": part,
+        "section": section,
         "part_label": (raw.get("partLabel") or "").strip() or _default_label(part),
         "question": question,
         "prep_seconds": prep_seconds,

@@ -59,9 +59,12 @@ class AllResultsView(APIView):
 
 
 class ResultDetailView(APIView):
-    """GET a single result belonging to the authenticated user."""
+    """GET a result (owner); DELETE a result (admin)."""
 
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method == "DELETE":
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get(self, request, pk):
         try:
@@ -71,3 +74,18 @@ class ResultDetailView(APIView):
                 {"error": "Natija topilmadi."}, status=status.HTTP_404_NOT_FOUND
             )
         return Response(ResultSerializer(result).data)
+
+    def delete(self, request, pk):
+        if not _is_admin(request):
+            return Response(
+                {"error": "Ruxsat yo'q. Admin sifatida kiring."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        try:
+            result = Result.objects.get(pk=pk)
+        except Result.DoesNotExist:
+            return Response(
+                {"error": "Natija topilmadi."}, status=status.HTTP_404_NOT_FOUND
+            )
+        result.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

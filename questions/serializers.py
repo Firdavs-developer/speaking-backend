@@ -11,8 +11,17 @@ class QuestionSerializer(serializers.ModelSerializer):
     prepSeconds = serializers.IntegerField(source="prep_seconds", required=False)
     speakSeconds = serializers.IntegerField(source="speak_seconds", required=False)
     image = serializers.SerializerMethodField()
+    referenceDescription = serializers.CharField(
+        source="reference_description", required=False
+    )
     cuePoints = serializers.ListField(
         source="cue_points", child=serializers.CharField(), required=False
+    )
+    forPoints = serializers.ListField(
+        source="for_points", child=serializers.CharField(), required=False
+    )
+    againstPoints = serializers.ListField(
+        source="against_points", child=serializers.CharField(), required=False
     )
 
     class Meta:
@@ -25,7 +34,10 @@ class QuestionSerializer(serializers.ModelSerializer):
             "prepSeconds",
             "speakSeconds",
             "image",
+            "referenceDescription",
             "cuePoints",
+            "forPoints",
+            "againstPoints",
         ]
 
     def get_image(self, obj):
@@ -38,8 +50,14 @@ class QuestionSerializer(serializers.ModelSerializer):
         # Drop optional keys when empty so the payload matches the frontend type.
         if not data.get("image"):
             data.pop("image", None)
+        if not data.get("referenceDescription"):
+            data.pop("referenceDescription", None)
         if not data.get("cuePoints"):
             data.pop("cuePoints", None)
+        if not data.get("forPoints"):
+            data.pop("forPoints", None)
+        if not data.get("againstPoints"):
+            data.pop("againstPoints", None)
         return data
 
 
@@ -97,7 +115,10 @@ def normalize_question(raw, index=0):
         "speak_seconds": speak_seconds,
         "image_src": "",
         "image_alt": "",
+        "reference_description": "",
         "cue_points": [],
+        "for_points": [],
+        "against_points": [],
         "order": index,
     }
 
@@ -108,10 +129,26 @@ def normalize_question(raw, index=0):
             values["image_src"] = src
             values["image_alt"] = (image.get("alt") or "").strip() or "Question image"
 
+    reference = raw.get("referenceDescription")
+    if isinstance(reference, str) and reference.strip():
+        values["reference_description"] = reference.strip()
+
     cue_points = raw.get("cuePoints")
     if isinstance(cue_points, list):
         cleaned = [str(p).strip() for p in cue_points if str(p).strip()]
         if cleaned:
             values["cue_points"] = cleaned
+
+    for_points = raw.get("forPoints")
+    if isinstance(for_points, list):
+        cleaned = [str(p).strip() for p in for_points if str(p).strip()]
+        if cleaned:
+            values["for_points"] = cleaned
+
+    against_points = raw.get("againstPoints")
+    if isinstance(against_points, list):
+        cleaned = [str(p).strip() for p in against_points if str(p).strip()]
+        if cleaned:
+            values["against_points"] = cleaned
 
     return values

@@ -24,12 +24,21 @@ class Question(models.Model):
     prep_seconds = models.PositiveIntegerField(default=5)
     speak_seconds = models.PositiveIntegerField(default=30)
 
-    # Optional question image.
-    image_src = models.CharField(max_length=500, blank=True)
+    # Optional question image. TextField so it can hold either a short URL
+    # or a long base64 data URL produced by the in-browser image uploader.
+    image_src = models.TextField(blank=True)
     image_alt = models.CharField(max_length=255, blank=True)
+
+    # Reference answer for Picture Description questions. The AI compares the
+    # student's spoken answer against this text for a semantic-similarity score.
+    reference_description = models.TextField(blank=True)
 
     # Optional list of cue-card bullet points (Part 2).
     cue_points = models.JSONField(default=list, blank=True)
+
+    # Optional "For" / "Against" guiding points for the Part 3 discussion table.
+    for_points = models.JSONField(default=list, blank=True)
+    against_points = models.JSONField(default=list, blank=True)
 
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

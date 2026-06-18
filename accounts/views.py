@@ -1,10 +1,24 @@
+from django.conf import settings
+from django.db.models import Count
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
+from .models import User
+from .serializers import (
+    AdminUserSerializer,
+    LoginSerializer,
+    RegisterSerializer,
+    UserSerializer,
+)
+
+
+def _is_admin(request):
+    """The admin password doubles as the bearer token for admin views."""
+    token = (request.headers.get("X-Admin-Token") or "").strip()
+    return bool(token) and token == settings.ADMIN_PASSWORD
 
 
 class RegisterView(APIView):
@@ -53,3 +67,20 @@ class LogoutView(APIView):
     def post(self, request):
         Token.objects.filter(user=request.user).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UsersListView(APIView):
+    """GET /api/auth/users/ — every registered user (admin only)."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not _is_admin(request):
+            return Response(
+                {"error": "Ruxsat yo'q. Admin sifatida kiring."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        users = User.objects.annotate(results_count=Count("results")).order_by(
+            "-date_joined"
+        )
+        return Response({"users": AdminUserSerializer(users, many=True).data})

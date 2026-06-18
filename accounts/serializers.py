@@ -56,3 +56,13 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "name", "email", "date_joined"]
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Admin view of a registered user, with how many tests they've taken."""
+
+    results_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "name", "email", "date_joined", "is_active", "results_count"]

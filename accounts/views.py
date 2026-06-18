@@ -86,12 +86,15 @@ class UsersListView(APIView):
         return Response({"users": AdminUserSerializer(users, many=True).data})
 
 
-class UserBlockView(APIView):
-    """POST /api/auth/users/<pk>/block/ — blacklist a user (admin only)."""
+class UserDeleteView(APIView):
+    """DELETE /api/auth/users/<pk>/ — permanently delete a user (admin only).
+
+    Cascades to the user's auth token and saved results, leaving no trace.
+    """
 
     permission_classes = [AllowAny]
 
-    def post(self, request, pk):
+    def delete(self, request, pk):
         if not _is_admin(request):
             return Response(
                 {"error": "Ruxsat yo'q. Admin sifatida kiring."},
@@ -106,34 +109,8 @@ class UserBlockView(APIView):
             )
         if user.is_superuser:
             return Response(
-                {"error": "Administratorni bloklab bo'lmaydi."},
+                {"error": "Administratorni o'chirib bo'lmaydi."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        user.is_active = False
-        user.save(update_fields=["is_active"])
-        # Kill any existing sessions so the block takes effect immediately.
-        Token.objects.filter(user=user).delete()
-        return Response({"ok": True})
-
-
-class UserUnblockView(APIView):
-    """POST /api/auth/users/<pk>/unblock/ — remove a user from the blacklist (admin only)."""
-
-    permission_classes = [AllowAny]
-
-    def post(self, request, pk):
-        if not _is_admin(request):
-            return Response(
-                {"error": "Ruxsat yo'q. Admin sifatida kiring."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        try:
-            user = User.objects.get(pk=pk)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "Foydalanuvchi topilmadi."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        user.is_active = True
-        user.save(update_fields=["is_active"])
-        return Response({"ok": True})
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

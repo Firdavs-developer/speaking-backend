@@ -43,15 +43,6 @@ class LoginSerializer(serializers.Serializer):
             password=attrs["password"],
         )
         if not user:
-            # authenticate() rejects inactive users, so a correct password on a
-            # blacklisted account lands here. Tell them they're blocked instead
-            # of the generic "wrong credentials" message.
-            blocked = User.objects.filter(email=email, is_active=False).first()
-            if blocked and blocked.check_password(attrs["password"]):
-                raise serializers.ValidationError(
-                    "Siz administrator tomonidan bloklangansiz. "
-                    "Blokdan chiqarish uchun adminga murojaat qiling."
-                )
             raise serializers.ValidationError(
                 "Email yoki parol noto'g'ri."
             )

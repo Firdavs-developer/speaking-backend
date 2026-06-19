@@ -23,24 +23,85 @@ def _is_admin(request):
 
 
 def _send_code_email(email, code, purpose):
-    """Email a verification code. Subject/body depend on what it's for."""
+    """Email a verification code as a styled HTML message (plain-text fallback).
+
+    Subject/wording depend on whether it's for registration or a reset.
+    """
     if purpose == EmailVerification.PURPOSE_RESET:
         subject = "Parolni tiklash kodi"
+        title = "Parolni tiklash"
         action = "parolingizni tiklash"
     else:
         subject = "Ro'yxatdan o'tish kodi"
+        title = "Ro'yxatdan o'tish"
         action = "ro'yxatdan o'tishni yakunlash"
-    message = (
+
+    text_message = (
         f"Speaking Practice ilovasida {action} uchun tasdiqlash kodingiz:\n\n"
         f"    {code}\n\n"
         "Kod 10 daqiqa davomida amal qiladi. Agar bu siz bo'lmasangiz, "
         "ushbu xabarni e'tiborsiz qoldiring."
     )
+
+    html_message = f"""\
+<!DOCTYPE html>
+<html lang="uz">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f6f7f5;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f6f7f5;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="padding:28px 32px 8px 32px;text-align:center;">
+              <span style="display:inline-block;font-size:11px;font-weight:bold;letter-spacing:3px;color:#0f766e;text-transform:uppercase;">IELTS</span>
+              <div style="font-size:20px;font-weight:bold;color:#18181b;margin-top:2px;">Speaking Practice</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 32px 0 32px;text-align:center;">
+              <h1 style="font-size:22px;color:#18181b;margin:16px 0 6px 0;">{title}</h1>
+              <p style="font-size:14px;color:#71717a;line-height:1.6;margin:0;">
+                {action.capitalize()} uchun quyidagi tasdiqlash kodini kiriting.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;">
+              <div style="background-color:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:18px;text-align:center;">
+                <div style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#0f766e;font-family:'Courier New',monospace;">{code}</div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 8px 32px;text-align:center;">
+              <p style="font-size:13px;color:#71717a;line-height:1.6;margin:0;">
+                Kod <strong>10 daqiqa</strong> davomida amal qiladi.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px 28px 32px;">
+              <hr style="border:none;border-top:1px solid #f4f4f5;margin:0 0 16px 0;">
+              <p style="font-size:12px;color:#a1a1aa;line-height:1.6;margin:0;text-align:center;">
+                Agar bu siz bo'lmasangiz, ushbu xabarni e'tiborsiz qoldiring.
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="font-size:11px;color:#a1a1aa;margin:16px 0 0 0;">© Speaking Practice</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
     send_mail(
         subject,
-        message,
+        text_message,
         settings.DEFAULT_FROM_EMAIL,
         [email],
+        html_message=html_message,
         fail_silently=False,
     )
 

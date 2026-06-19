@@ -4,7 +4,12 @@ from .views import (
     LoginView,
     LogoutView,
     MeView,
-    RegisterView,
+    PasswordResetConfirmView,
+    PasswordResetRequestCodeView,
+    PasswordResetVerifyCodeView,
+    RegisterCompleteView,
+    RegisterRequestCodeView,
+    RegisterVerifyCodeView,
     UserBlockView,
     UserDeleteView,
     UserUnblockView,
@@ -12,7 +17,36 @@ from .views import (
 )
 
 urlpatterns = [
-    path("register/", RegisterView.as_view(), name="register"),
+    path(
+        "register/request-code/",
+        RegisterRequestCodeView.as_view(),
+        name="register-request-code",
+    ),
+    path(
+        "register/verify-code/",
+        RegisterVerifyCodeView.as_view(),
+        name="register-verify-code",
+    ),
+    path(
+        "register/complete/",
+        RegisterCompleteView.as_view(),
+        name="register-complete",
+    ),
+    path(
+        "password-reset/request-code/",
+        PasswordResetRequestCodeView.as_view(),
+        name="password-reset-request-code",
+    ),
+    path(
+        "password-reset/verify-code/",
+        PasswordResetVerifyCodeView.as_view(),
+        name="password-reset-verify-code",
+    ),
+    path(
+        "password-reset/confirm/",
+        PasswordResetConfirmView.as_view(),
+        name="password-reset-confirm",
+    ),
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", MeView.as_view(), name="me"),

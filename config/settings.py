@@ -191,3 +191,24 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 from corsheaders.defaults import default_headers  # noqa: E402
 
 CORS_ALLOW_HEADERS = list(default_headers) + ['x-admin-token']
+
+
+# Email — used to send 6-digit registration / password-reset codes.
+# In development the console backend just prints the email to the terminal,
+# so the flow works without real SMTP credentials. Set EMAIL_HOST_USER and
+# EMAIL_HOST_PASSWORD in .env (e.g. a Gmail app password) to send for real.
+if env('EMAIL_HOST_USER'):
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = env(
+        'EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'
+    )
+
+EMAIL_HOST = env('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(env('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = env('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = env(
+    'DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'Speaking Practice <no-reply@speaking.local>'
+)

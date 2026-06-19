@@ -1,5 +1,9 @@
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.utils import timezone
 
 
 class UserManager(BaseUserManager):
@@ -53,3 +57,46 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.name or 'User'} <{self.email}>"
+
+
+def generate_code():
+    """A fresh 6-digit numeric verification code."""
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+class EmailVerification(models.Model):
+    """A one-time 6-digit code emailed to verify registration or reset a password.
+
+    One active code is kept per (email, purpose); requesting a new one
+    overwrites the old. Codes expire after CODE_TTL and lock after MAX_ATTEMPTS
+    wrong tries.
+    """
+
+    PURPOSE_REGISTER = "register"
+    PURPOSE_RESET = "reset"
+    PURPOSE_CHOICES = [
+        (PURPOSE_REGISTER, "register"),
+        (PURPOSE_RESET, "reset"),
+    ]
+
+    CODE_TTL = timedelta(minutes=10)
+    MAX_ATTEMPTS = 5
+
+    email = models.EmailField()
+    purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
+    code = models.CharField(max_length=6)
+    # The display name captured at step 1 of registration (unused for resets).
+    name = models.CharField(max_length=150, blank=True)
+    is_verified = models.BooleanField(default=False)
+    attempts = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ("email", "purpose")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.purpose} code for {self.email}"
+
+    def is_expired(self):
+        return timezone.now() > self.created_at + self.CODE_TTL

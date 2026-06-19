@@ -11,7 +11,7 @@ def api_root(request):
             "message": "Speaking backend ishlayapti.",
             "endpoints": {
                 "admin": "/admin/",
-                "register": "/api/auth/register/",
+                "register": "/api/auth/register/request-code/",
                 "login": "/api/auth/login/",
                 "me": "/api/auth/me/",
                 "questions": "/api/questions/",

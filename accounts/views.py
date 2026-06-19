@@ -1,16 +1,17 @@
 from django.conf import settings
+from django.core.mail import send_mail
 from django.db.models import Count
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import User
+from .models import EmailVerification, User, generate_code
 from .serializers import (
     AdminUserSerializer,
     LoginSerializer,
-    RegisterSerializer,
     UserSerializer,
 )
 
@@ -21,20 +22,267 @@ def _is_admin(request):
     return bool(token) and token == settings.ADMIN_PASSWORD
 
 
-class RegisterView(APIView):
-    """POST /api/auth/register/ — create a user and return an auth token."""
+def _send_code_email(email, code, purpose):
+    """Email a verification code. Subject/body depend on what it's for."""
+    if purpose == EmailVerification.PURPOSE_RESET:
+        subject = "Parolni tiklash kodi"
+        action = "parolingizni tiklash"
+    else:
+        subject = "Ro'yxatdan o'tish kodi"
+        action = "ro'yxatdan o'tishni yakunlash"
+    message = (
+        f"Speaking Practice ilovasida {action} uchun tasdiqlash kodingiz:\n\n"
+        f"    {code}\n\n"
+        "Kod 10 daqiqa davomida amal qiladi. Agar bu siz bo'lmasangiz, "
+        "ushbu xabarni e'tiborsiz qoldiring."
+    )
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [email],
+        fail_silently=False,
+    )
+
+
+def _check_code(email, purpose, code):
+    """Validate a submitted code against the stored one.
+
+    Returns (verification, error_response). On success error_response is None
+    and the matching row is returned; otherwise verification is None and a
+    ready-to-return DRF Response describes the problem.
+    """
+    code = (code or "").strip()
+    try:
+        verification = EmailVerification.objects.get(email=email, purpose=purpose)
+    except EmailVerification.DoesNotExist:
+        return None, Response(
+            {"error": "Kod topilmadi. Iltimos, qaytadan kod so'rang."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if verification.is_expired():
+        verification.delete()
+        return None, Response(
+            {"error": "Kod muddati tugagan. Iltimos, qaytadan kod so'rang."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if verification.attempts >= EmailVerification.MAX_ATTEMPTS:
+        verification.delete()
+        return None, Response(
+            {"error": "Juda ko'p urinish. Iltimos, qaytadan kod so'rang."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if verification.code != code:
+        verification.attempts += 1
+        verification.save(update_fields=["attempts"])
+        return None, Response(
+            {"error": "Kod noto'g'ri."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return verification, None
+
+
+class RegisterRequestCodeView(APIView):
+    """POST /api/auth/register/request-code/ — email a 6-digit code to start signup.
+
+    Body: {name, email}. Fails if the email is already registered.
+    """
 
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        name = (request.data.get("name") or "").strip()
+        email = (request.data.get("email") or "").strip().lower()
+
+        if not email:
+            return Response(
+                {"error": "Email kiritilishi shart."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"error": "Bu email allaqachon ro'yxatdan o'tgan."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        code = generate_code()
+        EmailVerification.objects.update_or_create(
+            email=email,
+            purpose=EmailVerification.PURPOSE_REGISTER,
+            defaults={
+                "code": code,
+                "name": name,
+                "is_verified": False,
+                "attempts": 0,
+                "created_at": timezone.now(),
+            },
+        )
+        _send_code_email(email, code, EmailVerification.PURPOSE_REGISTER)
+        return Response({"ok": True})
+
+
+class RegisterVerifyCodeView(APIView):
+    """POST /api/auth/register/verify-code/ — confirm the emailed code is correct.
+
+    Body: {email, code}. Marks the code verified but does not yet create a user.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        verification, error = _check_code(
+            email, EmailVerification.PURPOSE_REGISTER, request.data.get("code")
+        )
+        if error:
+            return error
+
+        verification.is_verified = True
+        verification.save(update_fields=["is_verified", "attempts"])
+        return Response({"ok": True})
+
+
+class RegisterCompleteView(APIView):
+    """POST /api/auth/register/complete/ — set a password and create the account.
+
+    Body: {email, code, password}. The code is re-checked, then the user is
+    created with the password they chose and an auth token is returned.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        password = request.data.get("password") or ""
+
+        if len(password) < 6:
+            return Response(
+                {"error": "Parol kamida 6 ta belgidan iborat bo'lishi kerak."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        verification, error = _check_code(
+            email, EmailVerification.PURPOSE_REGISTER, request.data.get("code")
+        )
+        if error:
+            return error
+
+        if User.objects.filter(email=email).exists():
+            verification.delete()
+            return Response(
+                {"error": "Bu email allaqachon ro'yxatdan o'tgan."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.create_user(
+            email=email,
+            password=password,
+            name=verification.name,
+        )
+        verification.delete()
         token, _ = Token.objects.get_or_create(user=user)
         return Response(
             {"token": token.key, "user": UserSerializer(user).data},
             status=status.HTTP_201_CREATED,
         )
+
+
+class PasswordResetRequestCodeView(APIView):
+    """POST /api/auth/password-reset/request-code/ — email a reset code.
+
+    Body: {email}. Always reports success so registered emails aren't leaked;
+    a code is only actually sent when the account exists and is active.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+
+        user = User.objects.filter(email=email).first()
+        if user and user.is_active:
+            code = generate_code()
+            EmailVerification.objects.update_or_create(
+                email=email,
+                purpose=EmailVerification.PURPOSE_RESET,
+                defaults={
+                    "code": code,
+                    "name": "",
+                    "is_verified": False,
+                    "attempts": 0,
+                    "created_at": timezone.now(),
+                },
+            )
+            _send_code_email(email, code, EmailVerification.PURPOSE_RESET)
+
+        return Response({"ok": True})
+
+
+class PasswordResetVerifyCodeView(APIView):
+    """POST /api/auth/password-reset/verify-code/ — confirm the reset code.
+
+    Body: {email, code}.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        verification, error = _check_code(
+            email, EmailVerification.PURPOSE_RESET, request.data.get("code")
+        )
+        if error:
+            return error
+
+        verification.is_verified = True
+        verification.save(update_fields=["is_verified", "attempts"])
+        return Response({"ok": True})
+
+
+class PasswordResetConfirmView(APIView):
+    """POST /api/auth/password-reset/confirm/ — set a new password.
+
+    Body: {email, code, password}. Re-checks the code, updates the password and
+    invalidates existing sessions.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        password = request.data.get("password") or ""
+
+        if len(password) < 6:
+            return Response(
+                {"error": "Parol kamida 6 ta belgidan iborat bo'lishi kerak."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        verification, error = _check_code(
+            email, EmailVerification.PURPOSE_RESET, request.data.get("code")
+        )
+        if error:
+            return error
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            verification.delete()
+            return Response(
+                {"error": "Foydalanuvchi topilmadi."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(password)
+        user.save(update_fields=["password"])
+        verification.delete()
+        # Force a fresh login everywhere with the new password.
+        Token.objects.filter(user=user).delete()
+        return Response({"ok": True})
 
 
 class LoginView(APIView):

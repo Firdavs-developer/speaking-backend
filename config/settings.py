@@ -50,6 +50,9 @@ ALLOWED_HOSTS = env('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 # Password used by the admin to manage speaking questions (matches the frontend).
 ADMIN_PASSWORD = env('ADMIN_PASSWORD', 'admin123')
 
+# Master password for the super admin, who creates/removes panel admin accounts.
+SUPER_ADMIN_PASSWORD = env('SUPER_ADMIN_PASSWORD', 'superadmin123')
+
 
 # Application definition
 
@@ -190,7 +193,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 # Allow the admin question-management header through CORS preflight.
 from corsheaders.defaults import default_headers  # noqa: E402
 
-CORS_ALLOW_HEADERS = list(default_headers) + ['x-admin-token']
+CORS_ALLOW_HEADERS = list(default_headers) + ['x-admin-token', 'x-super-token']
 
 
 # Email — used to send 6-digit registration / password-reset codes.

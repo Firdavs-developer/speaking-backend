@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 
-from .models import User
+from .models import PanelAdmin, User
 
 
 class LoginSerializer(serializers.Serializer):
@@ -50,3 +50,13 @@ class AdminUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "name", "email", "date_joined", "is_active", "results_count"]
+
+
+class PanelAdminSerializer(serializers.ModelSerializer):
+    """Super-admin view of a panel admin, including the plaintext password."""
+
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+
+    class Meta:
+        model = PanelAdmin
+        fields = ["id", "name", "email", "password", "createdAt"]

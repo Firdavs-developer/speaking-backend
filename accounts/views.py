@@ -8,10 +8,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import EmailVerification, User, generate_code
+from .models import EmailVerification, PanelAdmin, User, generate_code
 from .serializers import (
     AdminUserSerializer,
     LoginSerializer,
+    PanelAdminSerializer,
     UserSerializer,
 )
 
@@ -20,6 +21,12 @@ def _is_admin(request):
     """The admin password doubles as the bearer token for admin views."""
     token = (request.headers.get("X-Admin-Token") or "").strip()
     return bool(token) and token == settings.ADMIN_PASSWORD
+
+
+def _is_super(request):
+    """The super admin master password gates panel-admin management."""
+    token = (request.headers.get("X-Super-Token") or "").strip()
+    return bool(token) and token == settings.SUPER_ADMIN_PASSWORD
 
 
 def _send_code_email(email, code, purpose):
@@ -445,6 +452,122 @@ class UserUnblockView(APIView):
             )
         user.is_active = True
         user.save(update_fields=["is_active"])
+        return Response({"ok": True})
+
+
+class PanelAdminLoginView(APIView):
+    """POST /api/auth/admins/login/ — admin signs in with email + password.
+
+    On success returns the shared admin capability token (ADMIN_PASSWORD), so
+    question mutations keep working regardless of which admin is signed in.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        password = request.data.get("password") or ""
+
+        if not email or not password:
+            return Response(
+                {"error": "Email va parolni kiriting."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        admin = PanelAdmin.objects.filter(email=email).first()
+        if not admin or admin.password != password:
+            return Response(
+                {"error": "Email yoki parol noto'g'ri."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        return Response(
+            {"token": settings.ADMIN_PASSWORD, "email": admin.email, "name": admin.name}
+        )
+
+
+class SuperAdminLoginView(APIView):
+    """POST /api/auth/admins/super-login/ — super admin master-password login."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        password = (request.data.get("password") or "").strip()
+        if not password or password != settings.SUPER_ADMIN_PASSWORD:
+            return Response(
+                {"error": "Parol noto'g'ri."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        return Response({"token": settings.SUPER_ADMIN_PASSWORD})
+
+
+class PanelAdminListView(APIView):
+    """GET list / POST create panel admins (super admin only)."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not _is_super(request):
+            return Response(
+                {"error": "Ruxsat yo'q. Super admin sifatida kiring."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        admins = PanelAdmin.objects.all()
+        return Response({"admins": PanelAdminSerializer(admins, many=True).data})
+
+    def post(self, request):
+        if not _is_super(request):
+            return Response(
+                {"error": "Ruxsat yo'q. Super admin sifatida kiring."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        email = (request.data.get("email") or "").strip().lower()
+        name = (request.data.get("name") or "").strip()
+        password = request.data.get("password") or ""
+
+        if not email or "@" not in email:
+            return Response(
+                {"error": "To'g'ri email manzil kiriting."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(password) < 6:
+            return Response(
+                {"error": "Parol kamida 6 ta belgidan iborat bo'lsin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if PanelAdmin.objects.filter(email=email).exists():
+            return Response(
+                {"error": "Bu email bilan admin allaqachon mavjud."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        admin = PanelAdmin.objects.create(email=email, name=name, password=password)
+        return Response(
+            {"admin": PanelAdminSerializer(admin).data},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PanelAdminDeleteView(APIView):
+    """DELETE /api/auth/admins/<pk>/ — remove a panel admin (super admin only)."""
+
+    permission_classes = [AllowAny]
+
+    def delete(self, request, pk):
+        if not _is_super(request):
+            return Response(
+                {"error": "Ruxsat yo'q. Super admin sifatida kiring."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        try:
+            admin = PanelAdmin.objects.get(pk=pk)
+        except PanelAdmin.DoesNotExist:
+            return Response(
+                {"error": "Admin topilmadi."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        admin.delete()
         return Response({"ok": True})
 
 

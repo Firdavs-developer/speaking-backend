@@ -59,6 +59,26 @@ class User(AbstractBaseUser, PermissionsMixin):
         return f"{self.name or 'User'} <{self.email}>"
 
 
+class PanelAdmin(models.Model):
+    """An admin account created by the super admin to access the /admin panel.
+
+    Admins log in with email + password. The password is stored in plaintext on
+    purpose, so the super admin can read it back to an admin who forgets it.
+    These are separate from `User` (app students) and from Django superusers.
+    """
+
+    name = models.CharField(max_length=150, blank=True)
+    email = models.EmailField(unique=True)
+    password = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.name or 'Admin'} <{self.email}>"
+
+
 def generate_code():
     """A fresh 6-digit numeric verification code."""
     return f"{secrets.randbelow(1_000_000):06d}"
